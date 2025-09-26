@@ -1,15 +1,15 @@
 // app/components/AddNoteModal.tsx
 import React, { useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { saveNote } from '../storage/notes-storage';
 
@@ -25,6 +25,7 @@ export default function AddNoteModal({ visible, onClose, onNoteAdded }: AddNoteM
   const [loading, setLoading] = useState(false);
   const [tagsInput, setTagsInput] = useState('');
   const [category, setCategory] = useState('');
+  const [color, setColor] = useState('#fff'); // cor inicial da nota
 
   const handleSave = async () => {
     if (!title.trim() || !content.trim()) {
@@ -42,10 +43,14 @@ export default function AddNoteModal({ visible, onClose, onNoteAdded }: AddNoteM
           .map(t => t.trim())
           .filter(Boolean),
         category: category.trim() || undefined,
+        color, // salva a cor selecionada
       });
       
       setTitle('');
       setContent('');
+      setTagsInput('');
+      setCategory('');
+      setColor('#fff');
       onNoteAdded();
       onClose();
       Alert.alert('Sucesso', 'Nota adicionada com sucesso!');
@@ -61,6 +66,7 @@ export default function AddNoteModal({ visible, onClose, onNoteAdded }: AddNoteM
     setContent('');
     setTagsInput('');
     setCategory('');
+    setColor('#fff');
     onClose();
   };
 
@@ -72,7 +78,7 @@ export default function AddNoteModal({ visible, onClose, onNoteAdded }: AddNoteM
       onRequestClose={handleClose}
     >
       <KeyboardAvoidingView 
-        style={styles.container}
+        style={[styles.container, { backgroundColor: color }]} // aplica cor selecionada
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={styles.header}>
@@ -123,7 +129,22 @@ export default function AddNoteModal({ visible, onClose, onNoteAdded }: AddNoteM
             onChangeText={setCategory}
             maxLength={40}
           />
-          
+
+          {/* Seletor de cores */}
+          <Text style={{ marginTop: 16, fontWeight: '600', fontSize: 16, color: '#333' }}>Cor da nota:</Text>
+          <View style={styles.colorPicker}>
+            {['#fff', '#FFCDD2', '#C8E6C9', '#BBDEFB', '#FFF9C4', '#D1C4E9'].map((c, i) => (
+              <TouchableOpacity
+                key={c}
+                onPress={() => setColor(c)}
+                style={[
+                  styles.colorCircle,
+                  { backgroundColor: c, borderWidth: color === c ? 2 : 0, marginRight: i < 5 ? 10 : 0 }
+                ]}
+              />
+            ))}
+          </View>
+
           <View style={styles.characterCount}>
             <Text style={styles.characterCountText}>
               {content.length}/2000 caracteres
@@ -138,7 +159,6 @@ export default function AddNoteModal({ visible, onClose, onNoteAdded }: AddNoteM
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   header: {
     flexDirection: 'row',
@@ -220,5 +240,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
+  },
+  colorPicker: {
+    flexDirection: 'row',
+    marginTop: 8,
+  },
+  colorCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderColor: '#000',
   },
 });

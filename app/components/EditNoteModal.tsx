@@ -1,15 +1,14 @@
-// app/components/EditNoteModal.tsx
 import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { Note, updateNote } from '../storage/notes-storage';
 
@@ -31,6 +30,7 @@ export default function EditNoteModal({
   const [loading, setLoading] = useState(false);
   const [tagsInput, setTagsInput] = useState('');
   const [category, setCategory] = useState('');
+  const [color, setColor] = useState('#fff'); // ← estado da cor
 
   useEffect(() => {
     if (note) {
@@ -38,6 +38,7 @@ export default function EditNoteModal({
       setContent(note.content);
       setTagsInput((note.tags ?? []).join(', '));
       setCategory(note.category ?? '');
+      setColor(note.color || '#fff'); // ← inicializa com a cor atual da nota
     }
   }, [note]);
 
@@ -59,6 +60,7 @@ export default function EditNoteModal({
           .map(t => t.trim())
           .filter(Boolean),
         category: category.trim() || undefined,
+        color, // ← salva a cor selecionada
       });
       
       if (updatedNote) {
@@ -81,6 +83,7 @@ export default function EditNoteModal({
       setContent(note.content);
       setTagsInput((note.tags ?? []).join(', '));
       setCategory(note.category ?? '');
+      setColor(note.color || '#fff'); // ← reseta a cor
     }
     onClose();
   };
@@ -95,7 +98,7 @@ export default function EditNoteModal({
       onRequestClose={handleClose}
     >
       <KeyboardAvoidingView 
-        style={styles.container}
+        style={[styles.container, { backgroundColor: color }]} // ← aplica cor no modal
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={styles.header}>
@@ -146,6 +149,21 @@ export default function EditNoteModal({
             onChangeText={setCategory}
             maxLength={40}
           />
+
+          {/* Seletor de cores */}
+          <Text style={{ marginTop: 16, fontWeight: '600', fontSize: 16 }}>Cor da nota:</Text>
+          <View style={styles.colorPicker}>
+            {['#fff', '#FFCDD2', '#C8E6C9', '#BBDEFB', '#FFF9C4', '#D1C4E9'].map(c => (
+              <TouchableOpacity
+                key={c}
+                onPress={() => setColor(c)}
+                style={[
+                  styles.colorCircle, 
+                  { backgroundColor: c, borderWidth: color === c ? 2 : 0 }
+                ]}
+              />
+            ))}
+          </View>
           
           <View style={styles.characterCount}>
             <Text style={styles.characterCountText}>
@@ -159,10 +177,7 @@ export default function EditNoteModal({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
+  container: { flex: 1 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -172,33 +187,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
-  title: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  cancelButton: {
-    padding: 8,
-  },
-  cancelText: {
-    fontSize: 16,
-    color: '#007AFF',
-  },
-  saveButton: {
-    padding: 8,
-  },
-  saveText: {
-    fontSize: 16,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  disabledButton: {
-    opacity: 0.5,
-  },
-  content: {
-    flex: 1,
-    padding: 20,
-  },
+  title: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  cancelButton: { padding: 8 },
+  cancelText: { fontSize: 16, color: '#007AFF' },
+  saveButton: { padding: 8 },
+  saveText: { fontSize: 16, color: '#007AFF', fontWeight: '600' },
+  disabledButton: { opacity: 0.5 },
+  content: { flex: 1, padding: 20 },
   titleInput: {
     fontSize: 20,
     fontWeight: '600',
@@ -208,20 +203,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     color: '#333',
   },
-  contentInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-    textAlignVertical: 'top',
-  },
-  characterCount: {
-    alignItems: 'flex-end',
-    marginTop: 10,
-  },
-  characterCountText: {
-    fontSize: 12,
-    color: '#666',
-  },
+  contentInput: { flex: 1, fontSize: 16, color: '#333', textAlignVertical: 'top' },
   tagsInput: {
     marginTop: 16,
     fontSize: 14,
@@ -244,4 +226,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
+  colorPicker: { flexDirection: 'row', marginTop: 8, gap: 10 },
+  colorCircle: { width: 32, height: 32, borderRadius: 16, borderColor: '#000' },
+  characterCount: { alignItems: 'flex-end', marginTop: 10 },
+  characterCountText: { fontSize: 12, color: '#666' },
 });

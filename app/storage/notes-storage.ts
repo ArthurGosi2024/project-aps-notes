@@ -1,8 +1,8 @@
-// app/storage/notes-storage.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const NOTES_KEY = "NOTES_KEY";
 
+// Adicionamos 'color' como obrigatório
 export interface Note {
   id: string;
   title: string;
@@ -12,6 +12,7 @@ export interface Note {
   pinned?: boolean;
   tags?: string[];
   category?: string;
+  color: string; // ← novo campo
 }
 
 export async function getNotes(): Promise<Note[]> {
@@ -24,6 +25,7 @@ export async function getNotes(): Promise<Note[]> {
   }
 }
 
+// Função para salvar uma nova nota, garantindo que 'color' exista
 export async function saveNote(note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>): Promise<Note> {
   const notes = await getNotes();
   const newNote: Note = {
@@ -34,6 +36,7 @@ export async function saveNote(note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'
     pinned: note.pinned ?? false,
     tags: Array.isArray(note.tags) ? note.tags : [],
     category: note.category ? String(note.category) : undefined,
+    color: note.color || '#fff', // ← garante cor padrão
   };
   
   notes.push(newNote);
@@ -41,14 +44,16 @@ export async function saveNote(note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'
   return newNote;
 }
 
-export async function updateNote(id: string, updatedNote: Partial<Omit<Note, 'id' | 'createdAt'>>): Promise<Note | null> {
+// Função para atualizar uma nota existente
+export async function updateNote(
+  id: string,
+  updatedNote: Partial<Omit<Note, 'id' | 'createdAt'>>
+): Promise<Note | null> {
   const notes = await getNotes();
   const noteIndex = notes.findIndex(note => note.id === id);
-  
-  if (noteIndex === -1) {
-    return null;
-  }
-  
+
+  if (noteIndex === -1) return null;
+
   const updatedNoteData: Note = {
     ...notes[noteIndex],
     ...updatedNote,
@@ -59,73 +64,44 @@ export async function updateNote(id: string, updatedNote: Partial<Omit<Note, 'id
     category: updatedNote.category !== undefined
       ? (updatedNote.category ? String(updatedNote.category) : undefined)
       : (notes[noteIndex].category),
+    color: updatedNote.color || notes[noteIndex].color || '#fff', // ← garante cor
   };
-  
+
   notes[noteIndex] = updatedNoteData;
   await AsyncStorage.setItem(NOTES_KEY, JSON.stringify(notes));
   return updatedNoteData;
 }
 
+// Toggle pinned permanece igual
 export async function togglePinned(id: string): Promise<Note | null> {
   const notes = await getNotes();
   const noteIndex = notes.findIndex(n => n.id === id);
-  if (noteIndex === -1) {
-    return null;
-  }
+  if (noteIndex === -1) return null;
+
   const current = notes[noteIndex];
   const next: Note = {
     ...current,
     pinned: !current.pinned,
     updatedAt: new Date().toISOString(),
   };
+
   notes[noteIndex] = next;
   await AsyncStorage.setItem(NOTES_KEY, JSON.stringify(notes));
   return next;
 }
 
+// Delete nota permanece igual
 export async function deleteNote(id: string): Promise<boolean> {
   try {
-    console.log('=== INÍCIO DA EXCLUSÃO ===');
-    console.log('ID recebido para exclusão:', id);
-    console.log('Tipo do ID:', typeof id);
-    
     const notes = await getNotes();
-    console.log('Notas carregadas do storage:', notes.length);
-    console.log('IDs das notas existentes:', notes.map(n => n.id));
-    
     const noteIndex = notes.findIndex(note => note.id === id);
-    console.log('Índice encontrado:', noteIndex);
-    
-    if (noteIndex === -1) {
-      console.log('ERRO: Nota não encontrada para exclusão');
-      console.log('ID procurado:', id);
-      console.log('IDs disponíveis:', notes.map(n => n.id));
-      return false;
-    }
-    
-    const noteToDelete = notes[noteIndex];
-    console.log('Nota a ser excluída:', noteToDelete.title);
-    
+    if (noteIndex === -1) return false;
+
     notes.splice(noteIndex, 1);
-    console.log('Notas após exclusão:', notes.length);
-    
-    const jsonString = JSON.stringify(notes);
-    console.log('JSON a ser salvo:', jsonString.substring(0, 200) + '...');
-    
-    await AsyncStorage.setItem(NOTES_KEY, jsonString);
-    console.log('Nota salva no AsyncStorage com sucesso');
-    
-    // Verificar se foi realmente salva
-    const savedNotes = await getNotes();
-    console.log('Verificação: notas após salvar:', savedNotes.length);
-    console.log('=== FIM DA EXCLUSÃO ===');
-    
+    await AsyncStorage.setItem(NOTES_KEY, JSON.stringify(notes));
     return true;
   } catch (error) {
-    console.error('ERRO ao excluir nota:', error);
-    if (error instanceof Error) {
-      console.error('Stack trace:', error.stack);
-    }
+    console.error('Erro ao excluir nota:', error);
     return false;
   }
 }
@@ -144,7 +120,7 @@ export async function importNotes(json: string): Promise<{ imported: number } | 
   try {
     const parsed = JSON.parse(json);
     if (!Array.isArray(parsed)) return null;
-    // validações simples de estrutura
+
     const sanitized: Note[] = parsed
       .filter((n: any) => n && typeof n.id === 'string')
       .map((n: any) => ({
@@ -156,6 +132,7 @@ export async function importNotes(json: string): Promise<{ imported: number } | 
         pinned: Boolean(n.pinned),
         tags: Array.isArray(n.tags) ? n.tags.map((t: any) => String(t)) : [],
         category: n.category ? String(n.category) : undefined,
+        color: n.color || '#fff', // ← garante cor caso não venha do import
       }));
 
     await AsyncStorage.setItem(NOTES_KEY, JSON.stringify(sanitized));
