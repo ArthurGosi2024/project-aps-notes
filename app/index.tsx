@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AddNoteModal from './components/AddNoteModal';
 import EditNoteModal from './components/EditNoteModal';
 import ViewNoteModal from './components/ViewNoteModal';
-import { deleteNote, getNotes, Note, togglePinned } from './storage/notes-storage';
+import { deleteNote, getNotes, Note, togglePinned, duplicateNote, toggleArchived } from './storage/notes-storage';
 
 // Temas
 const lightTheme = {
@@ -48,10 +48,14 @@ export default function HomeScreen() {
   const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   // Dark mode
   const [isDarkMode, setIsDarkMode] = useState(false);
   const theme = isDarkMode ? darkTheme : lightTheme;
+
+  // Novo estado para mostrar/ocultar dicas
+  const [showTips, setShowTips] = useState(true);
 
   const loadNotes = async () => {
     setLoading(true);
@@ -64,9 +68,9 @@ export default function HomeScreen() {
       if (categoryFilter && !sortedNotes.some(n => (n.category || '') === categoryFilter)) {
         setCategoryFilter(null);
       }
-       if (tagFilter && !sortedNotes.some(n => (n.tags || []).includes(tagFilter))) {
+      if (tagFilter && !sortedNotes.some(n => (n.tags || []).includes(tagFilter))) {
         setTagFilter(null);
-    }
+      }
     } catch (error) {
       Alert.alert('Erro', 'Erro ao carregar as notas.');
     } finally {
@@ -117,52 +121,111 @@ export default function HomeScreen() {
     });
   };
 
-  const renderNoteItem = ({ item }: { item: Note }) => (
-    <TouchableOpacity
-      style={[styles.noteItem, { backgroundColor: item.color || theme.card, borderColor: theme.border }]}
-      onPress={() => handleViewNote(item)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.noteContent}>
-        <Text style={[styles.noteTitle, { color: '#000' }]} numberOfLines={1}>
-          {item.title}
-        </Text>
-        <Text style={[styles.notePreview, { color: '#000' }]} numberOfLines={2}>
-          {item.content}
-        </Text>
-        <Text style={[styles.noteDate, { color: 'rgba(26, 26, 26, 1)' }]}>
-          {formatDate(item.updatedAt)}
-        </Text>
-      </View>
+  const renderNoteItem = ({ item }: { item: Note }) => {
+    let dueDateText = '';
+    let dueDateColor = '#333';
 
-      <TouchableOpacity
-        style={[styles.editButton, { backgroundColor: theme.border }]}
-        onPress={() => handleEditNote(item)}
-      >
-        <Text style={[styles.editButtonText, { color: theme.button }]}>Editar</Text>
-      </TouchableOpacity>
+    if (item.dueDate) {
+      const due = new Date(item.dueDate);
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      const diffTime = due.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-      <TouchableOpacity
-        style={[styles.editButton, { marginLeft: 8, backgroundColor: theme.border }]}
-        onPress={async () => {
-          await togglePinned(item.id);
-          await loadNotes();
-        }}
-      >
-        <Text style={[styles.editButtonText, { color: theme.button }]}>{item.pinned ? 'Desafixar' : 'Fixar'}</Text>
-      </TouchableOpacity>
+      if (diffDays < 0) {
+        dueDateText = 'Vencido';
+        dueDateColor = '#ff0000';
+      } else if (diffDays === 0) {
+        dueDateText = 'Hoje';
+        dueDateColor = '#ff4500';
+      } else {
+        dueDateText = `Vence em ${diffDays} dia${diffDays > 1 ? 's' : ''}`;
+        dueDateColor = diffDays <= 3 ? '#ffa500' : '#00aa00';
+      }
+    }
 
-      {/* Lixeira */}
+    return (
       <TouchableOpacity
-        style={[styles.editButton, { marginLeft: 8, backgroundColor: '#ff0000ff' }]}
-        onPress={async () => {
-          await handleDeleteNote(item.id);
-        }}
+        style={[styles.noteItem, { backgroundColor: item.color || theme.card, borderColor: theme.border }]}
+        onPress={() => handleViewNote(item)}
+        activeOpacity={0.7}
       >
-        <Text style={[styles.editButtonText, { color: '#fff' }]}>X</Text>
+        <View style={styles.noteContent}>
+          <Text style={[styles.noteTitle, { color: '#000' }]} numberOfLines={1}>
+            {item.title}
+          </Text>
+          <Text style={[styles.notePreview, { color: '#000' }]} numberOfLines={2}>
+            {item.content}
+          </Text>
+          <Text style={[styles.noteDate, { color: 'rgba(26, 26, 26, 1)' }]}>
+            {formatDate(item.updatedAt)}
+          </Text>
+
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+            <TouchableOpacity
+              style={[styles.editButton, { backgroundColor: '#3ac4ffff' }]}
+              onPress={() => handleEditNote(item)}
+            >
+              <Text style={[styles.editButtonText, { color: '#ffff' }]}>Editar</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.editButton, { backgroundColor: '#ff65e5' }]}
+              onPress={async () => {
+                await togglePinned(item.id);
+                await loadNotes();
+              }}
+            >
+              <Text style={[styles.editButtonText, { color: '#ffffffff' }]}>
+                {item.pinned ? 'Desafixar' : 'Fixar'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.editButton, { backgroundColor: '#00AAFF' }]}
+              onPress={async () => {
+                try {
+                  const newNote = await duplicateNote(item.id);
+                  if (newNote) {
+                    Alert.alert('Nota duplicada', `A nota "${newNote.title}" foi criada com sucesso!`);
+                    await loadNotes();
+                  }
+                } catch (error) {
+                  Alert.alert('Erro', 'Não foi possível duplicar a nota. Tente novamente.');
+                }
+              }}
+            >
+              <Text style={[styles.editButtonText, { color: '#fff' }]}>Duplicar</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.editButton, { backgroundColor: '#ff0000ff' }]}
+              onPress={async () => {
+                await handleDeleteNote(item.id);
+              }}
+            >
+              <Text style={[styles.editButtonText, { color: '#fff' }]}>Excluir</Text>
+            </TouchableOpacity>
+          </View>
+
+          {item.dueDate && (
+            <Text style={{ color: dueDateColor, fontWeight: '500', marginTop: 6 }}>
+              {dueDateText}
+            </Text>
+          )}
+        </View>
+
+        <TouchableOpacity
+          style={[styles.editButton, { backgroundColor: '#ffa500' }]}
+          onPress={async () => { await toggleArchived(item.id); await loadNotes(); }}
+        >
+          <Text style={[styles.editButtonText, { color: '#fff' }]}>
+            {item.archived ? 'Desarquivar' : 'Arquivar'}
+          </Text>
+        </TouchableOpacity>
       </TouchableOpacity>
-    </TouchableOpacity>
-  );
+    );
+  };
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
@@ -178,8 +241,8 @@ export default function HomeScreen() {
   const filteredNotes = useMemo(() => {
     const text = query.trim().toLowerCase();
     let listByText = text
-      ? notes.filter(n => n.title.toLowerCase().includes(text) || n.content.toLowerCase().includes(text))
-      : [...notes];
+      ? notes.filter(n => (showArchived ? n.archived : !n.archived) && (n.title.toLowerCase().includes(text) || n.content.toLowerCase().includes(text)))
+      : notes.filter(n => showArchived ? n.archived : !n.archived);
 
     if (categoryFilter) {
       listByText = listByText.filter(n => (n.category || '').toLowerCase() === categoryFilter.toLowerCase());
@@ -192,7 +255,7 @@ export default function HomeScreen() {
     const pinned = listByText.filter(n => n.pinned);
     const others = listByText.filter(n => !n.pinned);
     return [...pinned, ...others];
-  }, [notes, query, categoryFilter, tagFilter]);
+  }, [notes, query, categoryFilter, tagFilter, showArchived]);
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -208,6 +271,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+
       {/* HEADER */}
       <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
         <Text style={[styles.headerTitle, { color: theme.text }]}>Minhas Notas</Text>
@@ -218,25 +282,45 @@ export default function HomeScreen() {
           >
             <Text style={[styles.addButtonText, { color: theme.buttonText }]}>+</Text>
           </TouchableOpacity>
+
           <TouchableOpacity
             style={[styles.addButton, { backgroundColor: theme.button }]}
             onPress={() => setIsDarkMode(!isDarkMode)}
           >
+            <Text style={[styles.addButtonText, { color: theme.buttonText, fontSize: 20 }]}>
+              {isDarkMode ? '◑' : '◐'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.addButton, { backgroundColor: theme.button }]}
+            onPress={() => setShowArchived(!showArchived)}
+          >
             <Text style={[styles.addButtonText, { color: theme.buttonText, fontSize: 15 }]}>
-              {isDarkMode ? '☀️' : '🌒'}
+              {showArchived ? '#' : '#'}
             </Text>
           </TouchableOpacity>
         </View>
       </View>
 
       {/* DICAS */}
-      <View style={[styles.infoBox, { backgroundColor: theme.card }]}>
-        <Text style={[styles.infoText, { color: theme.subtext }]}>
-          Dica: use a busca para localizar notas rapidamente. Fixe notas essenciais
-          para mantê-las no topo. Toque na nota para ver detalhes, editar,
-          compartilhar e excluir. Você também pode exportar/importar notas abaixo.
-        </Text>
-      </View>
+      {showTips && (
+        <View style={[styles.infoBox, { backgroundColor: theme.card, padding: 12, flexShrink: 0 }]}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={[styles.infoText, { color: theme.subtext, fontSize: 10 }]}>
+              Dicas rápidas:{"\n"}
+              • Use a busca para encontrar notas por título ou conteúdo.{"\n"}
+              • Fixe notas importantes para mantê-las no topo.{"\n"}
+              • Toque em uma nota para ver detalhes, editar, duplicar ou excluir.{"\n"}
+              • Toque no botão de arquivadas (# ou ícone) para alternar entre notas ativas e arquivadas.{"\n"}
+              • Alterne entre modo claro e escuro usando o botão ◑ / ◐ no canto superior.
+            </Text>
+            <TouchableOpacity onPress={() => setShowTips(false)}>
+              <Text style={{ fontSize: 14, color: theme.subtext, fontWeight: 'bold', marginLeft: 1, top: -60}}>×</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* BUSCA + CATEGORIAS */}
       <View style={[styles.searchContainer, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
@@ -326,7 +410,7 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9fa' },
-  searchContainer: { paddingHorizontal: 60, paddingBottom: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e0e0e0' },
+  searchContainer: { paddingHorizontal: 60, paddingBottom: 10, paddingTop: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e0e0e0' },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', gap: 8, marginTop: 8, marginLeft: 9},
   chip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, backgroundColor: '#f0f0f0' },
   chipActive: { backgroundColor: '#007AFF' },
@@ -345,10 +429,10 @@ const styles = StyleSheet.create({
   secondaryButtonText: { color: '#333', fontWeight: '600' },
   noteItem: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3.84, elevation: 5 },
   noteContent: { flex: 1, marginRight: 12 },
-  noteTitle: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 4 },
-  notePreview: { fontSize: 14, color: '#666', marginBottom: 8, lineHeight: 20 },
+  noteTitle: { fontSize: 20, fontWeight: '600', color: '#333', marginBottom: 4 },
+  notePreview: { fontSize: 12, color: '#666', marginBottom: 8, lineHeight: 20 },
   noteDate: { fontSize: 12, color: '#999' },
-  editButton: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#f0f0f0', borderRadius: 6 },
+  editButton: { paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#f0f0f0', borderRadius: 6 },
   editButtonText: { fontSize: 12, color: '#007AFF', fontWeight: '600' },
   emptyState: { alignItems: 'center' },
   emptyStateTitle: { fontSize: 18, fontWeight: '600', color: '#666', marginBottom: 8 },

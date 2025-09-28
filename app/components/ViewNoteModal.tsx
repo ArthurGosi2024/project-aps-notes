@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Note, togglePinned } from '../storage/notes-storage';
+import { duplicateNote } from '../storage/notes-storage';
 
 interface ViewNoteModalProps {
   visible: boolean;

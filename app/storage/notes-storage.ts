@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const NOTES_KEY = "NOTES_KEY";
 
-// Adicionamos 'color' como obrigatório
+// Adicionamos 'color' como obrigatório e 'archived' opcional
 export interface Note {
   id: string;
   title: string;
@@ -10,11 +10,14 @@ export interface Note {
   createdAt: string;
   updatedAt: string;
   pinned?: boolean;
+  archived?: boolean; // ← novo campo
   tags?: string[];
   category?: string;
-  color: string; // ← novo campo
+  color: string;
+  dueDate?: string;
 }
 
+// Pega todas as notas
 export async function getNotes(): Promise<Note[]> {
   try {
     const jsonValue = await AsyncStorage.getItem(NOTES_KEY);
@@ -25,7 +28,7 @@ export async function getNotes(): Promise<Note[]> {
   }
 }
 
-// Função para salvar uma nova nota, garantindo que 'color' exista
+// Salva uma nova nota
 export async function saveNote(note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>): Promise<Note> {
   const notes = await getNotes();
   const newNote: Note = {
@@ -34,24 +37,24 @@ export async function saveNote(note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     pinned: note.pinned ?? false,
+    archived: note.archived ?? false, // ← inicializa como false
     tags: Array.isArray(note.tags) ? note.tags : [],
     category: note.category ? String(note.category) : undefined,
-    color: note.color || '#fff', // ← garante cor padrão
+    color: note.color || '#fff',
   };
-  
+
   notes.push(newNote);
   await AsyncStorage.setItem(NOTES_KEY, JSON.stringify(notes));
   return newNote;
 }
 
-// Função para atualizar uma nota existente
+// Atualiza uma nota existente
 export async function updateNote(
   id: string,
   updatedNote: Partial<Omit<Note, 'id' | 'createdAt'>>
 ): Promise<Note | null> {
   const notes = await getNotes();
   const noteIndex = notes.findIndex(note => note.id === id);
-
   if (noteIndex === -1) return null;
 
   const updatedNoteData: Note = {
@@ -64,7 +67,8 @@ export async function updateNote(
     category: updatedNote.category !== undefined
       ? (updatedNote.category ? String(updatedNote.category) : undefined)
       : (notes[noteIndex].category),
-    color: updatedNote.color || notes[noteIndex].color || '#fff', // ← garante cor
+    color: updatedNote.color || notes[noteIndex].color || '#fff',
+    archived: updatedNote.archived ?? notes[noteIndex].archived ?? false, // ← mantém ou atualiza
   };
 
   notes[noteIndex] = updatedNoteData;
@@ -72,7 +76,7 @@ export async function updateNote(
   return updatedNoteData;
 }
 
-// Toggle pinned permanece igual
+// Toggle pinned
 export async function togglePinned(id: string): Promise<Note | null> {
   const notes = await getNotes();
   const noteIndex = notes.findIndex(n => n.id === id);
@@ -90,7 +94,25 @@ export async function togglePinned(id: string): Promise<Note | null> {
   return next;
 }
 
-// Delete nota permanece igual
+// Toggle archived
+export async function toggleArchived(id: string): Promise<Note | null> {
+  const notes = await getNotes();
+  const noteIndex = notes.findIndex(n => n.id === id);
+  if (noteIndex === -1) return null;
+
+  const current = notes[noteIndex];
+  const next: Note = {
+    ...current,
+    archived: !current.archived,
+    updatedAt: new Date().toISOString(),
+  };
+
+  notes[noteIndex] = next;
+  await AsyncStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+  return next;
+}
+
+// Deleta nota
 export async function deleteNote(id: string): Promise<boolean> {
   try {
     const notes = await getNotes();
@@ -106,16 +128,19 @@ export async function deleteNote(id: string): Promise<boolean> {
   }
 }
 
+// Pega nota por ID
 export async function getNoteById(id: string): Promise<Note | null> {
   const notes = await getNotes();
   return notes.find(note => note.id === id) || null;
 }
 
+// Exporta notas como JSON
 export async function exportNotes(): Promise<string> {
   const notes = await getNotes();
   return JSON.stringify(notes, null, 2);
 }
 
+// Importa notas de JSON
 export async function importNotes(json: string): Promise<{ imported: number } | null> {
   try {
     const parsed = JSON.parse(json);
@@ -130,9 +155,10 @@ export async function importNotes(json: string): Promise<{ imported: number } | 
         createdAt: n.createdAt ? String(n.createdAt) : new Date().toISOString(),
         updatedAt: n.updatedAt ? String(n.updatedAt) : new Date().toISOString(),
         pinned: Boolean(n.pinned),
+        archived: Boolean(n.archived), // ← importa arquivado
         tags: Array.isArray(n.tags) ? n.tags.map((t: any) => String(t)) : [],
         category: n.category ? String(n.category) : undefined,
-        color: n.color || '#fff', // ← garante cor caso não venha do import
+        color: n.color || '#fff',
       }));
 
     await AsyncStorage.setItem(NOTES_KEY, JSON.stringify(sanitized));
@@ -141,4 +167,24 @@ export async function importNotes(json: string): Promise<{ imported: number } | 
     console.error('Erro ao importar notas', e);
     return null;
   }
+}
+
+// DUPLICAR NOTA
+export async function duplicateNote(id: string): Promise<Note | null> {
+  const notes = await getNotes();
+  const noteToDuplicate = notes.find(note => note.id === id);
+  if (!noteToDuplicate) return null;
+
+  const duplicatedNote: Note = {
+    ...noteToDuplicate,
+    id: Date.now().toString(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    title: noteToDuplicate.title + " (Cópia)",
+    archived: noteToDuplicate.archived ?? false, // ← mantém arquivado ou não
+  };
+
+  notes.push(duplicatedNote);
+  await AsyncStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+  return duplicatedNote;
 }
